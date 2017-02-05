@@ -40,8 +40,8 @@ function erreur {
 
     # A COMPLETER: Les erreurs doivent etre emises stderr...
     # mais ce n'est pas le cas pour l'instant!
-    echo "*** Erreur: $msg"
-    echo ""
+    >&2 echo "*** Erreur: $msg"
+    >&2 echo ""
 
     # On emet le message d'aide si commande fournie invalide.
     # Par contre, ce message doit etre emis sur stdout.
@@ -155,9 +155,21 @@ readonly SEPARATEUR_PREALABLES=:
 # - depot inexistant
 #-------
 function lister {
-	awk -F"," '{print $1}' $1 | sort
+	arguments_utilises=0
+
+	if [[ $2 =~ ^--avec_inactifs$ ]]; then
+		awk -F"$SEP" '{
+		if($5 == "INACTIF")
+			print $1"?", "\""$2"\"", "\("$4"\)";
+		else 
+			print $1, "\""$2"\"", "\("$4"\)";
+		}' $1 2> /dev/null | sort
+		((arguments_utilises++))
+	else 
+		awk -F"$SEP" '$5 == "ACTIF" {print $1, "\""$2"\"", "\("$4"\)"}' $1 2> /dev/null | sort
+	fi
 	
-	return 0
+	return $arguments_utilises
 }
 
 
@@ -176,6 +188,7 @@ function lister {
 
 
 function ajouter {
+	
     return 0
 }
 
@@ -290,12 +303,14 @@ function main {
   	# A COMPLETER: il faut verifier si le flag --depot=... a ete specifie.
   	# Si oui, il faut modifier depot en consequence!
   
-	if [[ $1 =~ ^--depot=* ]] && assert_depot_existe ${1##--depot=}; then
+	if [[ $1 =~ ^--depot=* ]]; then
 		depot=${1##--depot=}
 		shift
 	else
 		depot=$DEPOT_DEFAUT
 	fi
+
+	assert_depot_existe $depot || exit 1
 
   	debug "On utilise le depot suivant:", $depot
 
@@ -321,7 +336,7 @@ function main {
           	erreur "Commande inconnue: '$commande'";;
   	esac
   	shift $?
-  
+
   	[[ $# == 0 ]] || erreur "Argument(s) en trop: '$@'"
 }
 
