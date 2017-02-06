@@ -367,7 +367,48 @@ function reactiver {
 # - sigle inexistant
 #-------
 function prealables {
-    return 0
+	assert_depot_existe $1
+	depot=$1; shift
+
+	arguments_utilises=1
+	[[ $# -ge 1 ]] || erreur "Nombre incorrect d'arguments"
+
+	if [[ $1 =~ ^--tous$ ]]; then
+		tous=true
+		((arguments_utilises++))
+		shift
+	fi 
+
+	assert_sigle_existe $depot $1 || erreur "Aucun cours: $1"
+
+	cours=$(awk -F"$SEP" -v sigle=$1 '$1==sigle {print $4}' $depot)
+	read -a array_initiale <<<$(echo $cours | awk -F"$SEPARATEUR_PREALABLES" '{for(i=1; i<=NF; i++) print $i}' | sort)
+
+	if [[ $tous == true ]]; then
+		for i in "${array_initiale[@]}"
+		do
+			read -a array_secondaire <<<$(prealables $depot --tous $i)
+		done
+		
+		for i in "${array_secondaire[@]}"
+		do
+			array_initiale[${#array_initiale[@]}]=$i
+		done
+	fi
+
+	array_ordonnee=($(
+		for i in "${array_initiale[@]}"
+		do
+			echo $i
+		done | sort -u)
+	)
+
+	for i in "${array_ordonnee[@]}"
+	do
+		echo $i
+	done 
+
+    return $arguments_utilises
 }
 
 ##########################################################################
