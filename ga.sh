@@ -186,7 +186,7 @@ function lister {
 
 
 function ajouter {
-	[[ $# -ge 3 ]] || erreur "Nombre insuffisant d'arguments"
+	[[ $# -ge 4 ]] || erreur "Nombre insuffisant d'arguments"
 	[[ $2 =~ [A-Z]{3}[0-9]{4} ]] || erreur "Sigle de cours incorrect"
 	! grep -q ^$2, $1 || erreur "Un cours avec le meme sigle existe deja"
 	
