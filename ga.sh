@@ -186,8 +186,8 @@ function lister {
 
 function ajouter {
 	[[ $# -ge 4 ]] || erreur "Nombre insuffisant d'arguments"
-	valider_sigle $2  || erreur "Sigle de cours incorrect"
-	! grep -q ^$2, $1 || erreur "Un cours avec le meme sigle existe deja"
+	valider_sigle $2
+	! assert_sigle_existe $1 $2 --avec_inactifs || erreur "Un cours avec le meme sigle existe deja"
 	
 	arguments_utilises=3
 	chaine="$2,$3,$4,"
@@ -196,10 +196,8 @@ function ajouter {
 
 	while [[ $# != 0 ]]
 	do
-		valider_sigle $1 || erreur "Sigle de prealable incorrect: '$1'"
-		grep -q $1 $fichier || erreur "Prealable invalide: '$1'"
-		! grep -q $1.*,INACTIF$ $fichier || erreur "Prealable invalide: '$1'"
-
+		valider_sigle $1
+		assert_sigle_existe $fichier $1 || erreur "Prealable invalide: '$1'"
 		chaine="$chaine$1"
 		shift
 		[[ $# == 0 ]] || chaine="$chaine$SEPARATEUR_PREALABLES"
@@ -294,7 +292,12 @@ function nb_credits {
 # - sigle inexistant
 #-------
 function supprimer {
-    return 0
+    [[ $#==2 ]] || erreur "Nombre incorrect d'arguments"
+	assert_sigle_existe $1 $2 --avec_inactifs || erreur "Aucun cours: $2"
+
+	sed -i "/^$2/d" $1
+
+	return 1
 }
 
 
@@ -356,7 +359,7 @@ function prealables {
 #------
 
 function valider_sigle {
-	return [[ $1 =~ [A-Z]{3}[0-9]{4} ]]
+	[[ $1 =~ [A-Z]{3}[0-9]{4} ]] || erreur "Sigle incorrect: $1"
 }
 
 #------
@@ -372,9 +375,9 @@ function assert_sigle_existe {
 	avec_inactifs=$?
 
 	if [[ $avec_inactifs == 0 ]]; then
-		grep -q $2 $1
+		grep -q ^$2, $1
 	else
-		grep $2 $1 | grep -qv ,INACTIF$
+		grep ^$2, $1 | grep -qv ,INACTIF$
 	fi
 
 	return $?
