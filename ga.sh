@@ -156,7 +156,6 @@ readonly SEPARATEUR_PREALABLES=:
 #-------
 function lister {
 	arguments_utilises=0
-	inactif=false
 		
 	if [[ $2 =~ ^--avec_inactifs$ ]]; then
 		inactif=true
@@ -164,8 +163,8 @@ function lister {
 	fi
 
 	awk -F"$SEP" -v inactif="$inactif" '
-		/,ACTIF/ { print $1, "\""$2"\"", "\("$4"\)" }
-		/,INACTIF/ && inactif=="true" { print $1"?", "\""$2"\"", "\("$4"\)"}
+		/,ACTIF$/ { print $1, "\""$2"\"", "\("$4"\)" }
+		/,INACTIF$/ && inactif=="true" { print $1"?", "\""$2"\"", "\("$4"\)"}
 	' $1 2> /dev/null | sort
 
 	return $arguments_utilises
@@ -187,8 +186,31 @@ function lister {
 
 
 function ajouter {
+	[[ $# -ge 3 ]] || erreur "Nombre insuffisant d'arguments"
+	[[ $2 =~ [A-Z]{3}[0-9]{4} ]] || erreur "Sigle de cours incorrect"
+	! grep -q ^$2, $1 || erreur "Un cours avec le meme sigle existe deja"
 	
-    return 0
+	arguments_utilises=3
+	chaine="$2,$3,$4,"
+	fichier=$1	
+	shift 4
+	while [ $# != 0 ]
+	do
+		[[ $1 =~ [A-Z]{3}[0-9]{4} ]] || erreur "Sigle de prealable incorrect: '$1'"
+		grep -q $1 $fichier || erreur "Prealable invalide: '$1'"
+		! grep -q $1.*,INACTIF$ $fichier || erreur "Prealable invalide: '$1'"
+		chaine="$chaine$1"
+		shift
+		if [ $# != 0 ]; then
+			chaine="$chaine$SEPARATEUR_PREALABLES"
+		fi
+		((arguments_utilises++))
+	done
+
+	chaine="$chaine,ACTIF" 
+	echo $chaine >> $fichier
+	
+    return $arguments_utilises
 }
 
 
@@ -309,7 +331,7 @@ function main {
 		depot=$DEPOT_DEFAUT
 	fi
 
-	assert_depot_existe $depot || exit 1
+	assert_depot_existe $depot
 
   	debug "On utilise le depot suivant:", $depot
 
