@@ -145,7 +145,6 @@ readonly SEP=$SEPARATEUR # Alias, pour alleger le code
 # Separateur pour les prealables d'un cours.
 readonly SEPARATEUR_PREALABLES=:
 
-
 #-------
 # Commande lister
 #
@@ -156,7 +155,7 @@ readonly SEPARATEUR_PREALABLES=:
 #-------
 function lister {
 	arguments_utilises=0
-		
+	
 	if [[ $2 =~ ^--avec_inactifs$ ]]; then
 		inactif=true
 		((arguments_utilises++))
@@ -187,23 +186,23 @@ function lister {
 
 function ajouter {
 	[[ $# -ge 4 ]] || erreur "Nombre insuffisant d'arguments"
-	[[ $2 =~ [A-Z]{3}[0-9]{4} ]] || erreur "Sigle de cours incorrect"
+	valider_sigle $2  || erreur "Sigle de cours incorrect"
 	! grep -q ^$2, $1 || erreur "Un cours avec le meme sigle existe deja"
 	
 	arguments_utilises=3
 	chaine="$2,$3,$4,"
 	fichier=$1	
 	shift 4
-	while [ $# != 0 ]
+
+	while [[ $# != 0 ]]
 	do
-		[[ $1 =~ [A-Z]{3}[0-9]{4} ]] || erreur "Sigle de prealable incorrect: '$1'"
+		valider_sigle $1 || erreur "Sigle de prealable incorrect: '$1'"
 		grep -q $1 $fichier || erreur "Prealable invalide: '$1'"
 		! grep -q $1.*,INACTIF$ $fichier || erreur "Prealable invalide: '$1'"
+
 		chaine="$chaine$1"
 		shift
-		if [ $# != 0 ]; then
-			chaine="$chaine$SEPARATEUR_PREALABLES"
-		fi
+		[[ $# == 0 ]] || chaine="$chaine$SEPARATEUR_PREALABLES"
 		((arguments_utilises++))
 	done
 
@@ -226,7 +225,32 @@ function ajouter {
 # - item de format invalide
 #-------
 function trouver {
-    return 0
+	arguments_utilises=1
+	tri=$1
+
+	[[ $# -ge 2 ]] || erreur "Nombre insuffisant d'arguments"
+
+    if [[ $2 =~ ^--avec_inactifs$ ]]; then
+		inactif=true
+		((arguments_utilises++))
+		shift
+	fi
+
+	if [[ $2 =~ ^--cle_tri= ]]; then
+		tri=${2##--cle_tri=}
+		((arguments_utilises++))
+		shift	
+	fi
+
+	if [[ $2 =~ ^--format= ]]; then
+		format=${2##--format=}
+		((arguments_utilises++))
+		shift
+	fi
+
+	#if ($inactif); then
+		#grep -q $2 $1
+
 }
 
 #-------
@@ -239,7 +263,23 @@ function trouver {
 # - sigle inexistant
 #-------
 function nb_credits {
-    return 0
+    arguments_utilises=0
+	total_credits=0
+	fichier=$1
+	shift
+
+	while [[ $# != 0 ]]
+	do
+		assert_sigle_existe $fichier $1 || erreur "Aucun cours: $1"
+		credit=$(awk -F"$SEP" -v sigle="$1" '$1==sigle {print $3}' $fichier)
+		((total_credits += $credit))
+		shift
+		((arguments_utilises++))
+	done
+
+	echo $total_credits
+
+	return $arguments_utilises
 }
 
 
@@ -304,6 +344,43 @@ function prealables {
 }
 
 ##########################################################################
+# FONCTIONS SECONDAIRES
+##########################################################################
+
+#------
+# Fonction valider_sigle
+#
+# Arguments: sigle
+#
+# Valide le format du sigle
+#------
+
+function valider_sigle {
+	return [[ $1 =~ [A-Z]{3}[0-9]{4} ]]
+}
+
+#------
+# Fonction assert_sigle_existe
+#
+# Arguments: depot sigle [--avec_inactifs]
+#
+# Verifie que le cours est present dans le depot
+#-----
+
+function assert_sigle_existe {
+	[[ $3 =~ ^--avec_inactifs$ ]]
+	avec_inactifs=$?
+
+	if [[ $avec_inactifs == 0 ]]; then
+		grep -q $2 $1
+	else
+		grep $2 $1 | grep -qv ,INACTIF$
+	fi
+
+	return $?
+}
+
+##########################################################################
 # Le programme principal
 #
 # La strategie utilisee pour uniformiser le trairement des commande
@@ -350,6 +427,7 @@ function main {
       	prealables|\
       	reactiver|\
       	supprimer|\
+		assert_sigle_existe|\
       	trouver)
           	$commande $depot "$@";;
 
