@@ -112,22 +112,23 @@ function assert_depot_existe {
 #  - Le depot existe deja et l'option --detruire n'a pas ete indiquee
 #-------
 function init {
-    depot=$1; shift
-    nb_arguments=0
+    depot=$1;
+    arguments_utilises=0
 
-    # A COMPLETER: traitement de la switch --detruire!
+    if [[ $2 =~ ^--detruire$ ]]; then
+		detruire=true
+		((arguments_utilises++))
+	fi
 
     if [[ -f $depot ]]; then
-        # Depot existe deja.
-        # On le detruit quand --detruire est specifie.
-        [[ $detruire ]] || erreur "Le fichier '$depot' existe. Si vous voulez le detruire, utilisez 'init --detruire'."
+		[[ $detruire == true ]] || erreur "Le fichier '$depot' existe. Si vous voulez le detruire, utilisez 'init --detruire'."
         \rm -f $depot
     fi
 
     # On 'cree' le fichier vide.
     touch $depot
 
-    return $nb_arguments
+    return $arguments_utilises
 }
 
 ##########################################################################
@@ -155,6 +156,7 @@ readonly SEPARATEUR_PREALABLES=:
 #-------
 function lister {
 	arguments_utilises=0
+	assert_depot_existe $1
 	
 	if [[ $2 =~ ^--avec_inactifs$ ]]; then
 		inactif=true
@@ -185,6 +187,7 @@ function lister {
 
 
 function ajouter {
+	assert_depot_existe $1
 	[[ $# -ge 4 ]] || erreur "Nombre insuffisant d'arguments"
 	valider_sigle $2
 	! assert_sigle_existe $1 $2 --avec_inactifs || erreur "Un cours avec le meme sigle existe deja"
@@ -223,6 +226,7 @@ function ajouter {
 # - item de format invalide
 #-------
 function trouver {
+	assert_depot_existe $1
 	arguments_utilises=1
 	tri=$1
 
@@ -261,6 +265,7 @@ function trouver {
 # - sigle inexistant
 #-------
 function nb_credits {
+	assert_depot_existe $1
     arguments_utilises=0
 	total_credits=0
 	fichier=$1
@@ -292,6 +297,7 @@ function nb_credits {
 # - sigle inexistant
 #-------
 function supprimer {
+	assert_depot_existe $1
     [[ $#==2 ]] || erreur "Nombre incorrect d'arguments"
 	assert_sigle_existe $1 $2 --avec_inactifs || erreur "Aucun cours: $2"
 
@@ -313,7 +319,16 @@ function supprimer {
 # - cours deja inactif
 #-------
 function desactiver {
-    return 0
+	assert_depot_existe $1
+    [[ $#==2 ]] || erreur "Nombre incorrect d'arguments"
+	assert_sigle_existe $1 $2 --avec_inactifs || erreur "Aucun cours: $2"
+	
+	statut=$(awk -F"$SEP" -v sigle="$2" '$1==sigle {print $5}' $1)
+	[[ $statut == "ACTIF" ]] || erreur "Cours deja inactif: $2"
+
+	sed -i "/^$2,/ s/ACTIF/INACTIF/" $1
+
+	return 1
 }
 
 #-------
@@ -322,13 +337,22 @@ function desactiver {
 # Arguments: depot sigle
 # 
 # Erreurs:
-# - depot inexistant
+# - depot inexistantt
 # - nombre incorrect d'arguments
 # - sigle inexistant
 # - cours deja actif
 #-------
 function reactiver {
-    return 0
+	assert_depot_existe $1
+    [[ $#==2 ]] || erreur "Nombre incorrect d'arguments"
+	assert_sigle_existe $1 $2 --avec_inactifs || erreur "Aucun cours: $2"
+	
+	statut=$(awk -F"$SEP" -v sigle="$2" '$1==sigle {print $5}' $1)
+	[[ $statut == "INACTIF" ]] || erreur "Cours deja actif: $2"
+
+	sed -i "/^$2,/ s/INACTIF/ACTIF/" $1
+
+	return 1
 }
 
 
@@ -410,8 +434,6 @@ function main {
 	else
 		depot=$DEPOT_DEFAUT
 	fi
-
-	assert_depot_existe $depot
 
   	debug "On utilise le depot suivant:", $depot
 
