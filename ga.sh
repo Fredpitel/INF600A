@@ -227,32 +227,42 @@ function ajouter {
 #-------
 function trouver {
 	assert_depot_existe $1
-	arguments_utilises=1
-	tri=$1
-
 	[[ $# -ge 2 ]] || erreur "Nombre insuffisant d'arguments"
+	depot=$1; shift
+	arguments_utilises=1
 
-    if [[ $2 =~ ^--avec_inactifs$ ]]; then
-		inactif=true
+    if [[ $1 =~ ^--avec_inactifs$ ]]; then
 		((arguments_utilises++))
 		shift
 	fi
 
-	if [[ $2 =~ ^--cle_tri= ]]; then
-		tri=${2##--cle_tri=}
+	if [[ $1 =~ ^--cle_tri= ]]; then
+		tri=${1##--cle_tri=}
 		((arguments_utilises++))
 		shift	
 	fi
 
-	if [[ $2 =~ ^--format= ]]; then
-		format=${2##--format=}
+	if [[ $1 =~ ^--format= ]]; then
+		format=${1##--format=}
 		((arguments_utilises++))
 		shift
 	fi
 
-	#if ($inactif); then
-		#grep -q $2 $1
+	commande="grep -h -i '$1' $depot"
 
+	if ! [[ $inactif == true ]]; then
+		commande="$commande | grep -v ,INACTIF$"
+	fi
+
+	case $tri in 
+		sigle) commande="$commande | sort -t\"$SEP\"";;
+		titre) commande="$commande | sort -t\"$SEP\" -k2";;
+		*);;
+	esac
+	
+	eval $commande
+
+	return $arguments_utilises
 }
 
 #-------
@@ -367,11 +377,10 @@ function reactiver {
 # - sigle inexistant
 #-------
 function prealables {
+	[[ $# -ge 2 ]] || erreur "Nombre incorrect d'arguments"
 	assert_depot_existe $1
 	depot=$1; shift
-
 	arguments_utilises=1
-	[[ $# -ge 1 ]] || erreur "Nombre incorrect d'arguments"
 
 	if [[ $1 =~ ^--tous$ ]]; then
 		tous=true
@@ -381,18 +390,16 @@ function prealables {
 
 	assert_sigle_existe $depot $1 || erreur "Aucun cours: $1"
 
-	cours=$(awk -F"$SEP" -v sigle=$1 '$1==sigle {print $4}' $depot)
-	read -a array_initiale <<<$(echo $cours | awk -F"$SEPARATEUR_PREALABLES" '{for(i=1; i<=NF; i++) print $i}' | sort)
+	IFS=$SEPARATEUR_PREALABLES read -a array_initiale <<< $(awk -F"$SEP" -v sigle=$1 '$1==sigle {print $4}' $depot)
 
 	if [[ $tous == true ]]; then
 		for i in "${array_initiale[@]}"
 		do
-			read -a array_secondaire <<<$(prealables $depot --tous $i)
-		done
-		
-		for i in "${array_secondaire[@]}"
-		do
-			array_initiale[${#array_initiale[@]}]=$i
+			read -a array_secondaire <<< $(prealables $depot --tous $i)
+			for j in "${array_secondaire[@]}"
+			do
+				array_initiale[${#array_initiale[@]}]=$j
+			done
 		done
 	fi
 
