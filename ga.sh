@@ -156,19 +156,18 @@ readonly SEPARATEUR_PREALABLES=:
 #-------
 function lister {
 	arguments_utilises=0
-
+	inactif=false
+		
 	if [[ $2 =~ ^--avec_inactifs$ ]]; then
-		awk -F"$SEP" '{
-		if($5 == "INACTIF")
-			print $1"?", "\""$2"\"", "\("$4"\)";
-		else 
-			print $1, "\""$2"\"", "\("$4"\)";
-		}' $1 2> /dev/null | sort
+		inactif=true
 		((arguments_utilises++))
-	else 
-		awk -F"$SEP" '$5 == "ACTIF" {print $1, "\""$2"\"", "\("$4"\)"}' $1 2> /dev/null | sort
 	fi
-	
+
+	awk -F"$SEP" -v inactif="$inactif" '
+		/,ACTIF/ { print $1, "\""$2"\"", "\("$4"\)" }
+		/,INACTIF/ && inactif=="true" { print $1"?", "\""$2"\"", "\("$4"\)"}
+	' $1 2> /dev/null | sort
+
 	return $arguments_utilises
 }
 
