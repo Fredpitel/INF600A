@@ -232,6 +232,7 @@ function trouver {
 	arguments_utilises=1
 
     if [[ $1 =~ ^--avec_inactifs$ ]]; then
+		inactif=true
 		((arguments_utilises++))
 		shift
 	fi
@@ -248,7 +249,7 @@ function trouver {
 		shift
 	fi
 
-	commande="grep -h -i '$1' $depot"
+	commande="grep -i '$1' $depot"
 
 	if ! [[ $inactif == true ]]; then
 		commande="$commande | grep -v ,INACTIF$"
@@ -259,6 +260,15 @@ function trouver {
 		titre) commande="$commande | sort -t\"$SEP\" -k2";;
 		*);;
 	esac
+
+	if [[ $format != "" ]]; then
+		commande="$commande | awk -F"$SEP" '{
+			str = \"$format\";
+			sub(/%S/, \$1, str);
+			sub(/%T/, \"'\''\"\$2\"'\''\", str);
+			sub(/%C/, \$3, str);
+			print str }'"
+	fi
 	
 	eval $commande
 
