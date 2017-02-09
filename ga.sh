@@ -112,16 +112,16 @@ function assert_depot_existe {
 #  - Le depot existe deja et l'option --detruire n'a pas ete indiquee
 #-------
 function init {
-    depot=$1;
+    depot=$1; shift
     arguments_utilises=0
 
-    if [[ $2 =~ ^--detruire$ ]]; then
-		detruire=true
+	if [[ $1 =~ ^--detruire$ ]]; then
+		detruire=$?
 		((arguments_utilises++))
 	fi
 
     if [[ -f $depot ]]; then
-		[[ $detruire == true ]] || erreur "Le fichier '$depot' existe. Si vous voulez le detruire, utilisez 'init --detruire'."
+		[[ $detruire == 0 ]] || erreur "Le fichier '$depot' existe. Si vous voulez le detruire, utilisez 'init --detruire'."
         \rm -f $depot
     fi
 
@@ -157,16 +157,16 @@ readonly SEPARATEUR_PREALABLES=:
 function lister {
 	arguments_utilises=0
 	assert_depot_existe $1
+	depot=$1; shift
 	
-	if [[ $2 =~ ^--avec_inactifs$ ]]; then
-		inactif=true
+	description_et_prealables='"\""$2"\"", "("$4")"'
+
+	if [[ $1 =~ ^--avec_inactifs$ ]]; then
 		((arguments_utilises++))
+		avec_inactifs=" /,INACTIF$/ { print \$1\"?\", $description_et_prealables }"
 	fi
 
-	awk -F"$SEP" -v inactif="$inactif" '
-		/,ACTIF$/ { print $1, "\""$2"\"", "\("$4"\)" }
-		/,INACTIF$/ && inactif=="true" { print $1"?", "\""$2"\"", "\("$4"\)"}
-	' $1 2> /dev/null | sort
+	eval "awk -F"$SEP" '/,ACTIF$/ { print \$1, $description_et_prealables } $avec_inactifs' $depot | sort"
 
 	return $arguments_utilises
 }
@@ -192,22 +192,22 @@ function ajouter {
 	valider_sigle $2
 	! assert_sigle_existe $1 $2 --avec_inactifs || erreur "Un cours avec le meme sigle existe deja"
 	
-	arguments_utilises=3
+	arguments_utilises=3 #sigle, titre, nb_credits
 	chaine="$2,$3,$4,"
-	fichier=$1	
+	depot=$1	
 	shift 4
 
 	while [[ $# != 0 ]]
 	do
 		valider_sigle $1
-		assert_sigle_existe $fichier $1 || erreur "Prealable invalide: '$1'"
+		assert_sigle_existe $depot $1 || erreur "Prealable invalide: '$1'"
 		chaine="$chaine$1"
 		shift
 		[[ $# == 0 ]] || chaine="$chaine$SEPARATEUR_PREALABLES"
 		((arguments_utilises++))
 	done
 
-	chaine="$chaine,ACTIF" 
+	chaine="$chaine,ACTIF"
 	echo $chaine >> $fichier
 	
     return $arguments_utilises
@@ -229,7 +229,7 @@ function trouver {
 	assert_depot_existe $1
 	[[ $# -ge 2 ]] || erreur "Nombre insuffisant d'arguments"
 	depot=$1; shift
-	arguments_utilises=1
+	arguments_utilises=1 #motif
 
     if [[ $1 =~ ^--avec_inactifs$ ]]; then
 		inactif=true
@@ -463,6 +463,18 @@ function assert_sigle_existe {
 	fi
 
 	return $?
+}
+
+#-----
+# Fonction valider_flag
+#
+# Arguments: argument flag
+#
+# Verifie que l'argument est un flag
+#-----
+
+function valider_flag {
+	return $($1 == $2)
 }
 
 ##########################################################################
