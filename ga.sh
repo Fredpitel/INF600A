@@ -231,7 +231,7 @@ function trouver {
 	arguments_utilises=1 #motif
 
     if [[ $1 =~ ^--avec_inactifs$ ]]; then
-		inactif=0
+		inactif=$?
 		((arguments_utilises++))
 		shift
 	fi
@@ -390,37 +390,23 @@ function prealables {
 	arguments_utilises=1 #sigle
 
 	if [[ $1 =~ ^--tous$ ]]; then
-		tous=0
+		tous=$?
 		((arguments_utilises++))
 		shift
 	fi
 
 	assert_sigle_existe $depot $1 || erreur "Aucun cours: $1"
 
-	IFS=$SEPARATEUR_PREALABLES read -a array_initiale <<< $(awk -F"$SEP" '/^'$1',/ {print $4}' $depot)
+	IFS=$SEPARATEUR_PREALABLES read -a tab_prealables <<< $(awk -F"$SEP" '/^'$1',/ {print $4}' $depot)
 
 	if [[ $tous == 0 ]]; then
-		for i in "${array_initiale[@]}"
+		for i in ${tab_prealables[@]}
 		do
-			read -a array_secondaire <<< $(prealables $depot --tous $i)
-			for j in "${array_secondaire[@]}"
-			do
-				array_initiale[${#array_initiale[@]}]=$j
-			done
+			tab_prealables+=($(prealables $depot --tous $i))
 		done
 	fi
 
-	array_ordonnee=($(
-		for i in "${array_initiale[@]}"
-		do
-			echo $i
-		done | sort -u)
-	)
-
-	for i in "${array_ordonnee[@]}"
-	do
-		echo $i
-	done 
+	[[ ${tab_prealables[@]} == "" ]] || printf "%s\n" "${tab_prealables[@]}" | sort -u
 
     return $arguments_utilises
 }
