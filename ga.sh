@@ -159,14 +159,14 @@ function lister {
 	assert_depot_existe $1
 	depot=$1; shift
 	
-	description_et_prealables='"\""$2"\"", "("$4")"'
+	titre_et_prealables='"\""$2"\"", "("$4")"'
 
 	if [[ $1 =~ ^--avec_inactifs$ ]]; then
 		((arguments_utilises++))
-		avec_inactifs=" /,INACTIF$/ { print \$1\"?\", $description_et_prealables }"
+		avec_inactifs=" /,INACTIF$/ { print \$1\"?\", $titre_et_prealables }"
 	fi
 
-	eval "awk -F"$SEP" '/,ACTIF$/ { print \$1, $description_et_prealables } $avec_inactifs' $depot | sort"
+	eval "awk -F"$SEP" '/,ACTIF$/ { print \$1, $titre_et_prealables } $avec_inactifs' $depot | sort"
 
 	return $arguments_utilises
 }
@@ -188,27 +188,26 @@ function lister {
 
 function ajouter {
 	assert_depot_existe $1
-	[[ $# -ge 4 ]] || erreur "Nombre insuffisant d'arguments"
-	valider_sigle $2
-	! assert_sigle_existe $1 $2 --avec_inactifs || erreur "Un cours avec le meme sigle existe deja"
+	depot=$1; shift
+	[[ $# -ge 3 ]] || erreur "Nombre insuffisant d'arguments"
+	valider_sigle $1
+	! assert_sigle_existe $depot $1 --avec_inactifs || erreur "Un cours avec le meme sigle existe deja"
 	
 	arguments_utilises=3 #sigle, titre, nb_credits
-	chaine="$2,$3,$4,"
-	depot=$1	
-	shift 4
+	chaine="$1,$2,$3,"; shift $arguments_utilises
 
 	while [[ $# != 0 ]]
 	do
 		valider_sigle $1
 		assert_sigle_existe $depot $1 || erreur "Prealable invalide: '$1'"
 		chaine="$chaine$1"
+		((arguments_utilises++))
 		shift
 		[[ $# == 0 ]] || chaine="$chaine$SEPARATEUR_PREALABLES"
-		((arguments_utilises++))
 	done
 
 	chaine="$chaine,ACTIF"
-	echo $chaine >> $fichier
+	echo $chaine >> $depot
 	
     return $arguments_utilises
 }
@@ -227,12 +226,12 @@ function ajouter {
 #-------
 function trouver {
 	assert_depot_existe $1
-	[[ $# -ge 2 ]] || erreur "Nombre insuffisant d'arguments"
 	depot=$1; shift
+	[[ $# -ge 1 ]] || erreur "Nombre insuffisant d'arguments"
 	arguments_utilises=1 #motif
 
     if [[ $1 =~ ^--avec_inactifs$ ]]; then
-		inactif=true
+		inactif=0
 		((arguments_utilises++))
 		shift
 	fi
@@ -251,7 +250,7 @@ function trouver {
 
 	commande="grep -i '$1' $depot"
 
-	if ! [[ $inactif == true ]]; then
+	if ! [[ $inactif == 0 ]]; then
 		commande="$commande | grep -v ,INACTIF$"
 	fi
 
@@ -263,11 +262,11 @@ function trouver {
 
 	if [[ $format != "" ]]; then
 		commande="$commande | awk -F"$SEP" '{
-			str = \"$format\";
-			sub(/%S/, \$1, str);
-			sub(/%T/, \"'\''\"\$2\"'\''\", str);
-			sub(/%C/, \$3, str);
-			print str }'"
+			chaine = \"$format\";
+			sub(/%S/, \$1, chaine)
+			sub(/%T/, \"'\''\"\$2\"'\''\", chaine)
+			sub(/%C/, \$3, chaine);
+			print chaine }'"
 	fi
 	
 	eval $commande
@@ -286,18 +285,16 @@ function trouver {
 #-------
 function nb_credits {
 	assert_depot_existe $1
+	depot=$1; shift
     arguments_utilises=0
 	total_credits=0
-	fichier=$1
-	shift
 
 	while [[ $# != 0 ]]
 	do
-		assert_sigle_existe $fichier $1 || erreur "Aucun cours: $1"
-		credit=$(awk -F"$SEP" -v sigle="$1" '$1==sigle {print $3}' $fichier)
-		((total_credits += $credit))
-		shift
+		assert_sigle_existe $depot $1 || erreur "Aucun cours: $1"
+		((total_credits +=$(awk -F"$SEP" '/^'$1',/ {print $3}' $depot)))
 		((arguments_utilises++))
+		shift
 	done
 
 	echo $total_credits
@@ -340,13 +337,13 @@ function supprimer {
 #-------
 function desactiver {
 	assert_depot_existe $1
-    [[ $#==2 ]] || erreur "Nombre incorrect d'arguments"
-	assert_sigle_existe $1 $2 --avec_inactifs || erreur "Aucun cours: $2"
+	depot=$1; shift
+    [[ $#==1 ]] || erreur "Nombre incorrect d'arguments"
+	assert_sigle_existe $depot $1 --avec_inactifs || erreur "Aucun cours: $1"
 	
-	statut=$(awk -F"$SEP" -v sigle="$2" '$1==sigle {print $5}' $1)
-	[[ $statut == "ACTIF" ]] || erreur "Cours deja inactif: $2"
+	[[ $(awk -F"$SEP" '/^'$1',/ {print $5}' $depot) == "ACTIF" ]] || erreur "Cours deja inactif: $1"
 
-	sed -i "/^$2,/ s/ACTIF/INACTIF/" $1
+	sed -i "/^$1,/ s/ACTIF/INACTIF/" $depot
 
 	return 1
 }
@@ -364,13 +361,13 @@ function desactiver {
 #-------
 function reactiver {
 	assert_depot_existe $1
-    [[ $#==2 ]] || erreur "Nombre incorrect d'arguments"
-	assert_sigle_existe $1 $2 --avec_inactifs || erreur "Aucun cours: $2"
+	depot=$1; shift
+    [[ $#==1 ]] || erreur "Nombre incorrect d'arguments"
+	assert_sigle_existe $depot $1 --avec_inactifs || erreur "Aucun cours: $1"
 	
-	statut=$(awk -F"$SEP" -v sigle="$2" '$1==sigle {print $5}' $1)
-	[[ $statut == "INACTIF" ]] || erreur "Cours deja actif: $2"
+	[[ $(awk -F"$SEP" '/^'$1',/ {print $5}' $depot) == "INACTIF" ]] || erreur "Cours deja actif: $1"
 
-	sed -i "/^$2,/ s/INACTIF/ACTIF/" $1
+	sed -i "/^$1,/ s/INACTIF/ACTIF/" $depot
 
 	return 1
 }
@@ -387,22 +384,22 @@ function reactiver {
 # - sigle inexistant
 #-------
 function prealables {
-	[[ $# -ge 2 ]] || erreur "Nombre incorrect d'arguments"
 	assert_depot_existe $1
 	depot=$1; shift
-	arguments_utilises=1
+	[[ $# -ge 1 ]] || erreur "Nombre incorrect d'arguments"
+	arguments_utilises=1 #sigle
 
 	if [[ $1 =~ ^--tous$ ]]; then
-		tous=true
+		tous=0
 		((arguments_utilises++))
 		shift
-	fi 
+	fi
 
 	assert_sigle_existe $depot $1 || erreur "Aucun cours: $1"
 
-	IFS=$SEPARATEUR_PREALABLES read -a array_initiale <<< $(awk -F"$SEP" -v sigle=$1 '$1==sigle {print $4}' $depot)
+	IFS=$SEPARATEUR_PREALABLES read -a array_initiale <<< $(awk -F"$SEP" '/^'$1',/ {print $4}' $depot)
 
-	if [[ $tous == true ]]; then
+	if [[ $tous == 0 ]]; then
 		for i in "${array_initiale[@]}"
 		do
 			read -a array_secondaire <<< $(prealables $depot --tous $i)
@@ -463,18 +460,6 @@ function assert_sigle_existe {
 	fi
 
 	return $?
-}
-
-#-----
-# Fonction valider_flag
-#
-# Arguments: argument flag
-#
-# Verifie que l'argument est un flag
-#-----
-
-function valider_flag {
-	return $($1 == $2)
 }
 
 ##########################################################################
