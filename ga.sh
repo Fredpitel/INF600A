@@ -250,24 +250,19 @@ function trouver {
 
 	commande="grep -i '$1' $depot"
 
-	if ! [[ $inactif == 0 ]]; then
-		commande="$commande | grep -v ,INACTIF$"
+	[[ $inactif == 0 ]] || commande="$commande | grep -v ,INACTIF$"
+
+	if [[ $tri != "" ]]; then
+		commande="$commande | sort -t\"$SEP\""
+		[[ $tri == "sigle" ]] || commande="$commande -k2"
 	fi
 
-	case $tri in 
-		sigle) commande="$commande | sort -t\"$SEP\"";;
-		titre) commande="$commande | sort -t\"$SEP\" -k2";;
-		*);;
-	esac
-
-	if [[ $format != "" ]]; then
-		commande="$commande | awk -F"$SEP" '{
-			chaine = \"$format\";
-			sub(/%S/, \$1, chaine)
-			sub(/%T/, \"'\''\"\$2\"'\''\", chaine)
-			sub(/%C/, \$3, chaine);
-			print chaine }'"
-	fi
+	[[ $format == "" ]] || commande="$commande | awk -F"$SEP" '{
+						   		chaine = \"$format\";
+								sub(/%S/, \$1, chaine)
+								sub(/%T/, \"'\''\"\$2\"'\''\", chaine)
+								sub(/%C/, \$3, chaine);
+								print chaine }'"
 	
 	eval $commande
 
