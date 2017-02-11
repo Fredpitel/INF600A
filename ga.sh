@@ -116,7 +116,7 @@ function init {
     arguments_utilises=0
 
 	if [[ $1 =~ ^--detruire$ ]]; then
-		detruire=$?
+		detruire=0
 		((arguments_utilises++))
 	fi
 
@@ -246,11 +246,11 @@ function trouver {
 
 	if [[ $1 =~ ^--format= ]]; then
 		format=" | awk -F"$SEP" '{
-			   		chaine = \"${1##--format=}\";
-					sub(/%S/, \$1, chaine)
-					sub(/%T/, \"'\''\"\$2\"'\''\", chaine)
-					sub(/%C/, \$3, chaine);
-					print chaine }'"
+			   			chaine = \"${1##--format=}\";
+						sub(/%S/, \$1, chaine)
+						sub(/%T/, \"'\''\"\$2\"'\''\", chaine)
+						sub(/%C/, \$3, chaine);
+						print chaine }'"
 		((arguments_utilises++))
 		shift
 	fi
@@ -301,12 +301,13 @@ function nb_credits {
 #-------
 function supprimer {
 	assert_depot_existe $1
-    [[ $#==2 ]] || erreur "Nombre incorrect d'arguments"
-	assert_sigle_existe $1 $2 --avec_inactifs || erreur "Aucun cours: $2"
+	depot=$1; shift
+    [[ $#==1 ]] || erreur "Nombre incorrect d'arguments"
+	assert_sigle_existe $depot $1 --avec_inactifs || erreur "Aucun cours: $1"
 
-	sed -i "/^$2/d" $1
+	sed -i "/^$1/d" $depot
 
-	return 1
+	return 1 #sigle
 }
 
 
@@ -331,7 +332,7 @@ function desactiver {
 
 	sed -i "/^$1,/ s/ACTIF/INACTIF/" $depot
 
-	return 1
+	return 1 #sigle
 }
 
 #-------
@@ -355,7 +356,7 @@ function reactiver {
 
 	sed -i "/^$1,/ s/INACTIF/ACTIF/" $depot
 
-	return 1
+	return 1 #sigle
 }
 
 
@@ -376,7 +377,7 @@ function prealables {
 	arguments_utilises=1 #sigle
 
 	if [[ $1 =~ ^--tous$ ]]; then
-		tous=$?
+		tous=0
 		((arguments_utilises++))
 		shift
 	fi
@@ -388,11 +389,11 @@ function prealables {
 	if [[ $tous == 0 ]]; then
 		for i in ${tab_prealables[@]}
 		do
-			tab_prealables+=($(prealables $depot --tous $i | sort -u)) 
+			tab_prealables+=($(prealables $depot --tous $i)) 
 		done
 	fi
 
-	[[ ${tab_prealables[@]} == "" ]] || printf "%s\n" "${tab_prealables[@]}"
+	[[ ${tab_prealables[@]} == "" ]] || printf "%s\n" "${tab_prealables[@]}" | sort -u
 
     return $arguments_utilises
 }
