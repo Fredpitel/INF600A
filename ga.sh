@@ -1,4 +1,4 @@
-#!/bin/sh -
+#!/bin/bash -
 #
 # Gestion de cours de programme d'etudes.
 
@@ -230,39 +230,30 @@ function trouver {
 	[[ $# -ge 1 ]] || erreur "Nombre insuffisant d'arguments"
 	arguments_utilises=1 #motif
 
-    if [[ $1 =~ ^--avec_inactifs$ ]]; then
-		inactif=$?
-		((arguments_utilises++))
-		shift
-	fi
+	commande="grep -i '$1' $depot"
+
+    ! [[ $1 =~ ^--avec_inactifs$ ]] && commande="$commande | grep -v ,INACTIF$"
+	((arguments_utilises+=$?))
+	shift $?
 
 	if [[ $1 =~ ^--cle_tri= ]]; then
-		tri=${1##--cle_tri=}
+		commande="$commande | sort -t\"$SEP\""
+		[[ ${1##--cle_tri} == "sigle" ]] || commande="$commande -k2"
 		((arguments_utilises++))
-		shift	
+		shift
 	fi
 
 	if [[ $1 =~ ^--format= ]]; then
 		format=${1##--format=}
-		((arguments_utilises++))
-		shift
-	fi
-
-	commande="grep -i '$1' $depot"
-
-	[[ $inactif == 0 ]] || commande="$commande | grep -v ,INACTIF$"
-
-	if [[ $tri != "" ]]; then
-		commande="$commande | sort -t\"$SEP\""
-		[[ $tri == "sigle" ]] || commande="$commande -k2"
-	fi
-
-	[[ $format == "" ]] || commande="$commande | awk -F"$SEP" '{
+		commande="$commande | awk -F"$SEP" '{
 						   		chaine = \"$format\";
 								sub(/%S/, \$1, chaine)
 								sub(/%T/, \"'\''\"\$2\"'\''\", chaine)
 								sub(/%C/, \$3, chaine);
 								print chaine }'"
+		((arguments_utilises++))
+		shift
+	fi
 	
 	eval $commande
 
@@ -397,11 +388,11 @@ function prealables {
 	if [[ $tous == 0 ]]; then
 		for i in ${tab_prealables[@]}
 		do
-			tab_prealables+=($(prealables $depot --tous $i))
+			tab_prealables+=($(prealables $depot --tous $i | sort -u)) 
 		done
 	fi
 
-	[[ ${tab_prealables[@]} == "" ]] || printf "%s\n" "${tab_prealables[@]}" | sort -u
+	[[ ${tab_prealables[@]} == "" ]] || printf "%s\n" "${tab_prealables[@]}"
 
     return $arguments_utilises
 }
