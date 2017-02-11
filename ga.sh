@@ -230,32 +230,32 @@ function trouver {
 	[[ $# -ge 1 ]] || erreur "Nombre insuffisant d'arguments"
 	arguments_utilises=1 #motif
 
-	commande="grep -i '$1' $depot"
-
-    ! [[ $1 =~ ^--avec_inactifs$ ]] && commande="$commande | grep -v ,INACTIF$"
-	((arguments_utilises+=$?))
-	shift $?
-
-	if [[ $1 =~ ^--cle_tri= ]]; then
-		commande="$commande | sort -t\"$SEP\""
-		[[ ${1##--cle_tri} == "sigle" ]] || commande="$commande -k2"
+    if [[ $1 =~ ^--avec_inactifs$ ]]; then
 		((arguments_utilises++))
 		shift
+	else
+		inactif=" | grep -v ,INACTIF$"
+	fi
+
+	if [[ $1 =~ ^--cle_tri= ]]; then
+		tri=" | sort -t\"$SEP\""
+		[[ ${1##--cle_tri=} == "sigle" ]] || tri="$tri -k2"
+		((arguments_utilises++))
+		shift	
 	fi
 
 	if [[ $1 =~ ^--format= ]]; then
-		format=${1##--format=}
-		commande="$commande | awk -F"$SEP" '{
-						   		chaine = \"$format\";
-								sub(/%S/, \$1, chaine)
-								sub(/%T/, \"'\''\"\$2\"'\''\", chaine)
-								sub(/%C/, \$3, chaine);
-								print chaine }'"
+		format=" | awk -F"$SEP" '{
+			   		chaine = \"${1##--format=}\";
+					sub(/%S/, \$1, chaine)
+					sub(/%T/, \"'\''\"\$2\"'\''\", chaine)
+					sub(/%C/, \$3, chaine);
+					print chaine }'"
 		((arguments_utilises++))
 		shift
 	fi
-	
-	eval $commande
+
+	eval "grep -i '$1' $depot $inactif $tri $format"
 
 	return $arguments_utilises
 }
