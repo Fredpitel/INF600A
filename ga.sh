@@ -155,7 +155,6 @@ readonly SEPARATEUR_PREALABLES=:
 # - depot inexistant
 #-------
 function lister {
-	arguments_utilises=0
 	assert_depot_existe $1
 	depot=$1; shift
 	
@@ -166,7 +165,7 @@ function lister {
 		avec_inactifs=" /,INACTIF$/ { print \$1\"?\", $titre_et_prealables }"
 	fi
 
-	eval "awk -F"$SEP" '/,ACTIF$/ { print \$1, $titre_et_prealables } $avec_inactifs' $depot | sort"
+	awk -F"$SEP" "/,ACTIF$/ { print \$1, $titre_et_prealables } $avec_inactifs" $depot | sort
 
 	return $arguments_utilises
 }
@@ -194,20 +193,20 @@ function ajouter {
 	! assert_sigle_existe $depot $1 --avec_inactifs || erreur "Un cours avec le meme sigle existe deja"
 	
 	arguments_utilises=3 #sigle, titre, nb_credits
-	chaine="$1,$2,$3,"; shift $arguments_utilises
+	chaine_cours="$1,$2,$3,"; shift $arguments_utilises
 
 	while [[ $# != 0 ]]
 	do
 		valider_sigle $1
 		assert_sigle_existe $depot $1 || erreur "Prealable invalide: '$1'"
-		chaine="$chaine$1"
+		chaine_cours="$chaine_cours$1"
 		((arguments_utilises++))
 		shift
-		[[ $# == 0 ]] || chaine="$chaine$SEPARATEUR_PREALABLES"
+		[[ $# == 0 ]] || chaine_cours="$chaine_cours$SEPARATEUR_PREALABLES"
 	done
 
-	chaine="$chaine,ACTIF"
-	echo $chaine >> $depot
+	chaine_cours="$chaine_cours,ACTIF"
+	echo $chaine_cours >> $depot
 	
     return $arguments_utilises
 }
@@ -239,12 +238,17 @@ function trouver {
 
 	if [[ $1 =~ ^--cle_tri= ]]; then
 		tri=" | sort -t\"$SEP\""
-		[[ ${1##--cle_tri=} == "sigle" ]] || tri="$tri -k2"
+		case ${1##--cle_tri=} in
+			sigle);;
+			titre) tri="$tri -k2";;
+			*) erreur "Cle de tri de valeur invalide";;
+		esac
 		((arguments_utilises++))
 		shift	
 	fi
 
 	if [[ $1 =~ ^--format= ]]; then
+		! [[ ${1##--format=} =~ %[^STC] ]] || erreur "Item de format invalide"
 		format=" | awk -F"$SEP" '{
 			   			chaine = \"${1##--format=}\";
 						sub(/%S/, \$1, chaine)
@@ -272,7 +276,6 @@ function trouver {
 function nb_credits {
 	assert_depot_existe $1
 	depot=$1; shift
-    arguments_utilises=0
 	total_credits=0
 
 	while [[ $# != 0 ]]
@@ -300,10 +303,8 @@ function nb_credits {
 # - sigle inexistant
 #-------
 function supprimer {
-	assert_depot_existe $1
+	gerer_erreur_desact_react_supp "$@"
 	depot=$1; shift
-    [[ $#==1 ]] || erreur "Nombre incorrect d'arguments"
-	assert_sigle_existe $depot $1 --avec_inactifs || erreur "Aucun cours: $1"
 
 	sed -i "/^$1/d" $depot
 
@@ -323,10 +324,8 @@ function supprimer {
 # - cours deja inactif
 #-------
 function desactiver {
-	assert_depot_existe $1
+	gerer_erreur_desact_react_supp "$@"
 	depot=$1; shift
-    [[ $#==1 ]] || erreur "Nombre incorrect d'arguments"
-	assert_sigle_existe $depot $1 --avec_inactifs || erreur "Aucun cours: $1"
 	
 	[[ $(awk -F"$SEP" '/^'$1',/ {print $5}' $depot) == "ACTIF" ]] || erreur "Cours deja inactif: $1"
 
@@ -347,10 +346,8 @@ function desactiver {
 # - cours deja actif
 #-------
 function reactiver {
-	assert_depot_existe $1
+	gerer_erreur_desact_react_supp "$@"
 	depot=$1; shift
-    [[ $#==1 ]] || erreur "Nombre incorrect d'arguments"
-	assert_sigle_existe $depot $1 --avec_inactifs || erreur "Aucun cours: $1"
 	
 	[[ $(awk -F"$SEP" '/^'$1',/ {print $5}' $depot) == "INACTIF" ]] || erreur "Cours deja actif: $1"
 
@@ -358,7 +355,6 @@ function reactiver {
 
 	return 1 #sigle
 }
-
 
 #-------
 # Commande prealables
@@ -423,16 +419,34 @@ function valider_sigle {
 #-----
 
 function assert_sigle_existe {
-	[[ $3 =~ ^--avec_inactifs$ ]]
-	avec_inactifs=$?
-
-	if [[ $avec_inactifs == 0 ]]; then
+	if [[ $3 =~ ^--avec_inactifs$ ]]; then
 		grep -q ^$2, $1
 	else
 		grep ^$2, $1 | grep -qv ,INACTIF$
 	fi
 
 	return $?
+}
+
+#------
+# Fonction gerer_erreur_desact_react_supp
+#
+# Arguments: depot sigle
+#
+# Erreurs:
+# - depot inexistant
+# - nombre incorrect d'arguments
+# - sigle inexistant
+#
+# Fait la gestion des erreurs pour les fonctions desactiver, reactiver et supprimer
+#------
+function gerer_erreur_desact_react_supp {
+	assert_depot_existe $1
+	depot=$1; shift
+    [[ $#==1 ]] || erreur "Nombre incorrect d'arguments"
+	assert_sigle_existe $depot $1 --avec_inactifs || erreur "Aucun cours: $1"
+
+	return 0
 }
 
 ##########################################################################
